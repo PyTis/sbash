@@ -67,7 +67,7 @@ in Bash.  This parent program, will be like a server to clients, we will dub
 thee the "Controller" program.  This Controller program, will create a Bash
 shell, and only really watch for a SigtermKill (exit) to know it itself should
 exit.  It will pass all input, all keys depressed to the Bash program, while
-monitoring idle time.  If idle time is greater than T, T being the set idle
+MONITORIng idle time.  If idle time is greater than T, T being the set idle
 time permitted, then it will hide, almost like minimizing in Winblows, the Bash
 shell. Next it will use the SS Controller (Screen-Saver Controller), which at
 first, will be just a blank screen.  This will be written to eventually be
@@ -95,4 +95,14 @@ file.  This would of course require some sort of interactive listing feature,
 that would list possible, installed screen savers to the user, to try and chose
 from.
 
+
+Syncronis
+Asyncronis
+must run asynchronous so it can run returns immediately and we can continue in
+the main thread.
+
+
+Shell=True
+	VS
+shell=False
 
