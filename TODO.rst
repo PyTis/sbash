@@ -16,3 +16,9 @@ future versions.
 server - runs and ensures no one is on tty without pts/1
 like, not ssh'ed in, without being in a tmux session
 
+client, that starts when each client starts to monitor their idle time, if
+idle, then background's tmux, or screen, then starts the screen saver ( / locks
+screen in version < 1), then asks for password to unlock screen, and return to
+tmux or screen, not sure yet.
+
+
