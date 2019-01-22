@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# -*- coding:yram utf-8 -*-
+# -*- coding: utf-8 -*-
 # ##############################################################################
 # The contents of this file are subject to the PyTis Public License Version		#
 # 3.0 (the "License"); you may not use this file except in compliance with		 #
@@ -23,7 +23,7 @@ NAME:
 	pylock
 
 SYNOPSIS:
-	pylock [--options] [-H] [-V] [-D]
+	pylock [--options] [-H] [-v] [-D]
 
 DESCRIPTION:
 
@@ -44,7 +44,7 @@ UNDERSTANDING LOGGING and OUTPUT:
  will be the pytis_tools.log, if debugging is turned on, then the log file will
  be {program_name}.log found in the same directory.	In this program's case
  that would be pybkup.log	So if you use -D the output ends up in a different
- log file, but this is just to keep debugging separate from normal logging.	-V
+ log file, but this is just to keep debugging separate from normal logging.	v-
  --verbose is off by default by with this program, unless you use the action
  'test' then it is on (unless you specify --quiet, then it stays off).
 
@@ -55,7 +55,7 @@ UNDERSTANDING LOGGING and OUTPUT:
 
 	-D: print debug messages to log only
 
-	-V: alone does not print debug messages anywhere, because -D or --debug not
+	-v: alone does not print debug messages anywhere, because -D or --debug not
 		given
 
 	-DV: now debug messages are sent to their log file, and make it to the screen
@@ -64,10 +64,10 @@ UNDERSTANDING LOGGING and OUTPUT:
 	Print normal level information, always written to log (although which log is
 		being used depends on if you are using debugging, as stated above).
 
-	-V allows info messages to print to STDOUT, thus to the screen for you to
+	-v allows info messages to print to STDOUT, thus to the screen for you to
 		see.
 
-	-q or --quiet turns off -V
+	-q or --quiet turns off -v
 
 
  warn:
@@ -124,6 +124,42 @@ from cStringIO import StringIO
 
 import idle.idle as Idle
 
+# This program needs to import PyTis(2) v4.1, which imports modules from the
+# sub-package pylib, this program also needs to import from the sub-package
+# cobj, pylib.cobj itself, has to import from the parent, pytis, which it
+# can only do if the parent directory is a package, turning the parent (bin)
+# into a package breaks importing pytis for this program in the first place
+# and caused severe circular import errors.	To fix this, we have to adjust the
+# path.
+# vvvvv XXX-TODO may not need this here, dunno, remove at end and try it. vvvvv
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__),'..')))
+# ^^^^^ XXX-TODO may not need this here, dunno, remove at end and try it. ^^^^^
+
+#
+# Internal
+#
+try:
+	#from pers import	PyTis # Shared GPL/PPL License
+	import pytis as PyTis # Shared GPL/PPL License
+	from pylib import configobj as COBJ
+except ImportError as e:
+	# We cannot go any further than this, we can't use the Parser or Logging tool
+	# to display these errors because those very tools are loaded from PyTis.
+	# Therefore, display errors now and exit with an errored exit code.
+	print("This program requires the PyTis Python library to run.")
+	print("You may download the PyTis library, or do an SVN checkout from:")
+	print("<https://sourceforge.net/projects/pytis/>")
+	print("This program should be installed in the bin directory of the PyTis library.")
+	print(str(e))
+	sys.exit(1)
+
+is_debian = 'debian' in ' '.join(platform.dist()).lower() or 'ubuntu' in \
+	' '.join(platform.dist()).lower()
+
+#
+# Third-Party
+#
+
 # =============================================================================
 # End Imports
 # -----------------------------------------------------------------------------
@@ -140,12 +176,208 @@ __version__ = '0.1'
 # Begin HELPER Functions
 # -----------------------------------------------------------------------------
 
+class LockScreen (object):
+	pass
+
+class LockScreenThread(PyTis.MyThread):
+
+
+	def __init__(self):
+		''' So, "Start" could be Confused with Run, but "Start" fires the process
+		up, and gets the wheels turning, then will actually call "Run".  Once
+		"Start" is called, it next calls lowercase "start" to do anything that
+		should happen when the program is started.  Then, it calls "Run" which is
+		the threaded function, that may be called multiple times.
+		"_run" is only called, when the programmer forgets to assign any callbacks. 
+		Remmember, "Run" is the thread.  It can call "_stop", if it needs to exit.	
+		"_stop" calls "stop" which can be overridden, it's purpose is last minute
+		cleanup, for example, a user presses CTRL+c, for a KeyboardInterrupt, log
+		files need closing, etc.
+		"Stop" is called by this program, but another instance, that can look up a
+		deamon finding it's PID, and sending a SIGTERM.
+
+		'''
+
+		global log
+		threading.Thread.__init__(self, target=self.Run, name='LockScreen-Thread')
+
+		self.keep_going=True
+		if log is not None:
+			self.setLogFile(log)
+		atexit.register(self.stop)
+
+	def _run(self):
+		self.log.warn('running placeholder until callbacks are set')
+		#PyTis.clearScreen()
+		#self.log.info("Hello")
+
+
+	def _stop(self):
+		self.keep_going=False
+		self.stop()
+
+	def start(self):
+		''' You should override this method when you subclass Process.
+It will be called before the process will be runned via when you call caplital 
+Start. '''
+		#self.log.debug('override start')
+		pass
+
+	def stop(self):
+		''' CALLED atexit REGISTERED in INIT, also called by _stop, which is called
+		in Run, when keep_going is found to be False.
+		'''
+		"""
+		You should override this method when you subclass Process.
+It will be called after the process has been stopped or interupted by
+signal.SIGTERM"""
+		#self.log.debug('override stop')
+		pass
+
+	def Start(self):
+		stderr = sys.stderr
+		old_pid = self.pidfile.validate()
+		if old_pid:
+			self.log.error("Error during service start:\n " \
+				"Already running on PID %s (or pid file '%s' is stale)" % \
+				(old_pid, self.pidfile.pidfile))
+			return
+
+		# Start the service
+		self.log.info("starting the %s service now" % (self.parent_name))
+		if self.daemonize():
+			try:
+				self.pidfile.create()
+			except RuntimeError as err:
+				# *IMPORTANT* No matter what, this will not make it to the screen.
+				# Even print statements won't make it to the screen from here.
+				# This is already within the spawned child process with no open pipes
+				# to the parent.	The best we can do is log.
+				self.log.error("Error during service start: %s" % str(err))
+				return
+
+			atexit.register(self.remove_pid)
+			self.start()
+			try:
+				self.keep_going = True
+				self.running = True
+#				thread.start_new_thread(self.Run, None, self.opts)
+				t=threading.Thread(None,self.Run,None)
+#				self.Run()
+				t.start()
+				#t.opts=self.opts
+			#	t.join()
+			except Exception as e:
+				self.keep_going=False
+				self.running=False
+				self.log.error(e)
+				#print >> sys.stderr, e
+				#sys.stderr.write(str(e))
+				raise Exception(e)
+				return
+			self.log.info('%s service started' % self.parent_name)
+		else:
+			self.log.info("Success, all done")
+		return
+
+	def Stop(self):
+		pid = self.pidfile.validate()
+		if not pid:
+			self.log.error("pidfile %s does not exist. The %s service is not " \
+			"running." % (self.pidfile.pidfile, self.parent_name))
+			return # not an error in a restart
+
+		# Try killing the service process
+		try:
+			while 1:
+				os.kill(pid, signal.SIGTERM)
+				time.sleep(0.1)
+		except OSError as err:
+			err = str(err)
+			if err.find("No such process") > 0:
+				self.pidfile.unlink()
+			else:
+				self.log.error('Error during service stop, %s' % str(err))
+				raise OSError(err)
+
+		self.log.info('stopping %s [%s] service.' %(self.parent_name, pid))
+		self.log.debug('service [%s] was stopped by SIGTERM signal' % pid)
+
+	#def remove_pid(self):
+	#	if self.pidfile.validate(): self.pidfile.unlink()
+
+
+	def Run(self):
+		print("called by thread")
+		return 0
+		i=0
+		os.nice(self.niceness)
+		while self.keep_going:
+			if not self.callbacks:
+				self._run()
+			else:	
+				if self.frequency or ( not self.frequency and not i):
+					for v in self.callbacks:
+						callback = v.getCallback()
+						args = v.getArgs()
+						kwargs = v.getKwArgs()
+						try:
+							callback(*args,**kwargs)
+						except (KeyboardInterrupt, QuitNow) as e:
+							print("\nbye!")
+							self.keep_going = False
+							self._stop()
+							self.running=False
+							return
+						except Exception as e:
+							self.log.error("Some error occured.")
+							type_,value_,traceback_ = sys.exc_info()
+							self.log.debug("type: %s" % type_)
+							self.log.debug("type2: %s" %type(e))
+							self.log.debug("value: %s" % value_)
+							for tb_line in traceback.format_tb(traceback_):
+								self.log.debug(tb_line)
+							self.log.error(str(e))
+
+				if not self.frequency and not i:
+						self._stop()
+						self.running=False
+						return
+
+			if self.frequency:
+				time.sleep(self.frequency)
+				
+			try:
+				if self.opts.debug:
+					i+=1
+					if i > 2: 
+						self._stop()
+						self.running=False
+						return
+			except (AttributeError, NameError) as e:
+				pass
+
+
+
+def run(opts, config):
+	""" Okay, I know I can just keep this in a function, K.I.S.S., and I hope I
+	am not horribly breaking the KISS rule, but I am usually going to be calling
+	this with the need for it to be in a thread.  Therefore, I am going to write
+	it into a class to make it easier in the future for threading. 
+
+	"""
+	lock_screen = LockScreen()
+	lock_screen2 = LockScreenThread()
+	lock_screen2.opts = opts
+	lock_screen2.start()
+
+
 # -----------------------------------------------------------------------------
 # End HELPER Functions
 # =============================================================================
 
 def main():
-	"""usage: pylock [-a/--action] [-Dv] (example: pylock)
+	"""usage: pylock [--PAM] [-Dv] (example: pylock)
 	"""
 	global __configdir__, errors, log
 
@@ -173,7 +405,7 @@ AUTHOR:
 
 CHANGE LOG:
 
-	v0.1 MINOR CHANGE
+	v.1 MINOR CHANGE
 		Ran importnanny and removed un-needed imports.
 
 CREATED:
@@ -238,14 +470,14 @@ VERSION:
 					 help="Enable debugging`$")
 
 
-	# This is a little trick to tell if the user entered the -V/--verbose flag.
+	# This is a little trick to tell if the user entered the -v/--verbose flag.
 	# We want verbosity on by default, but we also want to know if the user
 	# entered it for debug items, and providing end messages vs informed output.
 	dbgroup.add_option("", "--totaly-verbose", action="store_true",
 		default=False, dest='totally_verbose', 
 		help=optparse.SUPPRESS_HELP)
 
-	dbgroup.add_option("-V", "--verbose", action="store_true",
+	dbgroup.add_option("-v", "--verbose", action="store_true",
 					 default=False, dest='verbose',
 					 help="Be more Verbose (make lots of noise).  Off by default, " \
 					 "unless in dry-run.`$")
@@ -255,7 +487,7 @@ VERSION:
 					 help="be vewwy quiet (I'm hunting wabbits).  On by default, " \
 					 "unless in dry-run.`$")
 
-	dbgroup.add_option("-v", "--version", action="store_true",
+	dbgroup.add_option("-V", "--version", action="store_true",
 					 default=False, dest='version',
 					 help="Display Version")
 
@@ -269,13 +501,13 @@ VERSION:
 
 	if opts.dry_run and not opts.quiet: opts.verbose = True
 
-	#if not opts.quiet: opts.verbose = True # Defaults to Verbose
-	if not opts.verbose: opts.quiet = True # Defaults to Quiet 
+	if not opts.quiet: opts.verbose = True # Defaults to Verbose
+	#if not opts.verbose: opts.quiet = True # Defaults to Quiet 
 
 
 	if opts.debug:
 		main.__doc__ = "%s\n\n	CONFIG FILE: %s" % (main.__doc__, \
-			os.path.abspath(config_filename))
+			os.path.abspath('none.txt'))
 	else:
 		pass
 
@@ -289,7 +521,8 @@ VERSION:
 	if opts.version:
 		return PyTis.version(__version__)
 
-	if not opts.quiet and not opts.verbose and len(args)==0 and not errors:
+	config={}
+	if not opts.quiet and len(args) and not errors:
 		return parser.print_usage()
 	elif not errors:
 		try:
@@ -314,5 +547,4 @@ VERSION:
 
 if __name__ == '__main__':
 		sys.exit(main())
-
 

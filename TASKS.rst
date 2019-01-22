@@ -106,3 +106,6 @@ Shell=True
 	VS
 shell=False
 
+I just found out, that you CAN background bash, simply by running bash in bash
+Then you grap the PID and you call os.kill(PID, signal.SIGSTOP),
+ you can resume the process with signal.SIGCONT for continue!
