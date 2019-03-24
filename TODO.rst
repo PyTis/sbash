@@ -22,3 +22,12 @@ screen in version < 1), then asks for password to unlock screen, and return to
 tmux or screen, not sure yet.
 
 
+
+>>> os.kill(25887, signal.SIGTSTP)
+I just found out, that you CAN background bash, simply by running bash in bash
+Then you grap the PID and you call os.kill(PID, signal.SIGSTOP),
+ you can resume the process with signal.SIGCONT for continue!
+
+>>> os.kill(25887, signal.SIGCONT)
+>>> os.kill(25887, signal.SIGCONT)
+>>> os.kill(25887, signal.SIGWINCH)
