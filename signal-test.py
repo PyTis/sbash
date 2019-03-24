@@ -4,20 +4,21 @@ import os
 import sys
 import time
 import signal
+import atexit
 
 SIGNALS_TO_NAMES_DICT = dict((getattr(signal, n), n) \
 	for n in dir(signal) if n.startswith('SIG') and '_' not in n )
 
-
 def receive_signal(signum, stack):
 	if signum in [1,2,3,15]:
 		print 'Caught signal %s (%s), exiting.' % (SIGNALS_TO_NAMES_DICT[signum], str(signum))
-		main()
+		#main()
 		sys.exit()
 	else:
 		print 'Caught signal %s (%s), ignoring.' % (SIGNALS_TO_NAMES_DICT[signum], str(signum))
 
 def main():
+	atexit.register(main)
 	uncatchable = ['SIG_DFL','SIGSTOP','SIGKILL']
 	for i in [x for x in dir(signal) if x.startswith("SIG")]:
 		if not i in uncatchable:
