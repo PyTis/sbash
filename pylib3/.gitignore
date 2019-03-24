@@ -1,2 +1,3 @@
-awslib.py
+*.pyc
+*.swp
 
