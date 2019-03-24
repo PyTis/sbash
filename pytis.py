@@ -25,7 +25,46 @@ adding in several classes from pyservice.py Andrey Usov
 daemonizing python scripts, but with no success.  I am going to have to
 rewrite parts of it but I will be utilizing some of his classes.
 
-RIGHTVERSION
+# RIGHTVERSION GOTO line 66 (end of comments) ||| GOTO line 138 (CHANGE LOG)
+
+I don't know why, I may have been programing since I was four years old, and
+now, near 40, as a highly paid professional, I still can't seem to remember the
+difference of Mutable vs Immutable.  Now, I know what the difference is, and
+when, and how to use these as an advantage, I just forget the "word" that
+defines this consept I very well know.  Thus, pasting definition below, as a
+reference.
+
+	Mutable vs Immutable:
+
+	Mutable vs Immutable Objects. A mutable object can be changed after it's
+	created, and an immutable object can't. That said, if you're defining your
+	own class, you can make its objects immutable by making all fields final and
+	private. Strings can be mutable or immutable depending on the language.
+
+	Flag vs. Argument:
+		Flag - an input option that accepts no input.
+		Argument - an input option that requires input.
+
+	*(for vim searching: 
+		flag vs argument vs optional flag vs optional argument vs)*
+
+program versioning.  (I need to add this to newscript)
+# XXX::TODO::GET`ER DONE!
+# __version__ = 0.1 --> creation
+# __version__ = 0.2 --> it works
+# __version__ = 0.3 --> clean it up
+# __version__ = 0.4 --> document what has been cleaned up
+# __version__ = 0.5 --> document everything else
+# __version__ = 0.6 --> test everything we can, try to break it with bad input
+# __version__ = 0.7 --> apply bug fixes
+# __version__ = 0.8 --> document bug fixes, apply spell checking and cleanup to
+#												documentation.
+# __version__ = 0.9 --> run importnanny, and ensure it is properly copyrighted! 
+# __version__ = 0.9? -> ready for release, just needs packaged up 
+# this is where confusion sets in, I still need to finish / complete jhelp, and
+# learn how to auto-build man-pages from the --help options
+# __version__ = 1.0 --> release with setup.py / installation files.
+
 """
 # builtin
 import base64 as b64
@@ -39,6 +78,7 @@ import errno
 import pydoc
 import atexit
 import signal
+import getpass
 import logging
 import datetime
 import optparse
@@ -90,11 +130,55 @@ __created__ = '06:14pm 09 Sep, 2009'
 __copyright__ = 'PyTis.com'
 __configdir__ = pytis_configure.configdir # '/root/etc'
 __logdir__ = pytis_configure.logdir # '/root/log'
-__version__ = 5.2
+__version__ = 6.0 
 
 
 
 __change_log__ = """
+
+CHANGE LOG
+
+6.1
+	MINOR CHANGE ( version from boolean to integer)
+		old PyTis.MyLogger::opt_verbose = False
+		new PyTis.MyLogger::opt_verbose = 0 ( must be >=0<5 ) 
+			(0,1,2,3,4) 0=quiet,1=verbose,2=more verbose,3=most verbose,4=debug too
+
+6.0
+  MAJOR CHANGE (rather, many minor changes)
+  Moved os.touch into a function.
+  Created is_root() function
+  Altered Pidfile.get_path so that NON root users can have paths
+    within their own home directory.
+  Fixed minor bug in Pidfile.fixdirs, where os.abspath was called
+    instead of os.path.abspath
+  Fixed BIG Bug, with MyThread inside of Run, where frequency of 0
+    would run indefinately, need to "untab" (move left) the 'if not
+    frequency' testing block, still within the while loop.
+  Secondly, within the same MyThread.Run metohd, I added a log.warning
+    and comment block, explaining the beauty of running in -D/--debug
+    mode, and not getting stuck in a loop, because it breaks after the
+    third cycle.
+    >> self.log.warning("STOPPING THE PROCESS BY DESIGN.")
+
+  Fixed os.touch functionality.  MANY things were wrong, it used
+    O_APPEND (incorrectly, you cannot append to a non-existing file
+    DUH!) instead of O_CREAT, AND, from version 3 to version 3.6 it
+    was broken, as the truly low-level support wasn't actually
+    completed, and calling os.open within the with statement raised an
+    "AttributeError __exit__".  In other words, Python3's os.open was
+    broken.  I had to use the built in "open" function instead.  I am
+    not really sure where I got the code that is being used for the
+    current design of touch:
+      def touch(fname, times=None, ns=None, dir_fd=None):
+
+    But I feel like it must be correct, it looks like I did some real
+    research on it.
+
+	Lastly, I believe this version of the primary PyTis library is
+		now completely universal.  In other-words, it works properly in
+		Python2.7 as well as Python3.x
+
 
 5.2
 	Added relogOpts function, this utilizes the above added protected_options 
@@ -107,7 +191,7 @@ __change_log__ = """
 	even here.  Well, recently, I added col2num and num2col functions, for MS
 	Excel column translation.
 
-4.2:
+4.2
 	created new class object ConfigField
 	added class method to ConfigFile.validate
 	added class method to ConfigFile.validate_obj
@@ -622,20 +706,7 @@ limit - default maximum for the number of available file descriptors.
 			return ['ionice', '-c3']
 		return ['ionice', '-c%s' % self.ioniceness_class, '-n%s' % self.ioniceness]
 
-	def service(self, opts):
-		''' alias for self.control with the "action" pulled out of opts and passed 
-		in seperately
-		'''
-		try:
-			self.action = opts.action
-		except AttributeError as e:
-			if type(opts) is type(str()) and opts.lower() in ('start','stop',
-			'restart','status'):
-				self.action=opts
-			else:
-				raise ProgrammerError("optparse action is missing, to " \
-					"use MyThread.service optparse must have a valid action " \
-					"(start,stop,restart,status)")
+	def buildAttrs(self, opts):
 		try:
 			self.niceness = opts.niceness
 		except AttributeError as e:
@@ -656,6 +727,21 @@ limit - default maximum for the number of available file descriptors.
 		except (AttributeError, NameError, ValueError) as e:
 			self.frequency = self.default_frequency
 
+	def service(self, opts):
+		''' alias for self.control with the "action" pulled out of opts and passed 
+		in seperately
+		'''
+		try:
+			self.action = opts.action
+		except AttributeError as e:
+			if type(opts) is type(str()) and opts.lower() in ('start','stop',
+			'restart','status'):
+				self.action=opts
+			else:
+				raise ProgrammerError("optparse action is missing, to " \
+					"use MyThread.service optparse must have a valid action " \
+					"(start,stop,restart,status)")
+		self.buildAttrs(opts)
 		return self.control(self.action)
 
 	def Run(self):
@@ -688,10 +774,10 @@ limit - default maximum for the number of available file descriptors.
 								self.log.debug(tb_line)
 							self.log.error(str(e))
 
-				if not self.frequency and not i:
-						self._stop()
-						self.running=False
-						return
+			if not self.frequency and not i:
+					self._stop()
+					self.running=False
+					return
 
 			if self.frequency:
 				time.sleep(self.frequency)
@@ -700,6 +786,9 @@ limit - default maximum for the number of available file descriptors.
 				if self.opts.debug:
 					i+=1
 					if i > 2: 
+						#self.log.warning("The [-D/--debug] is True, therefore, by " \
+						#	"design, the loop only runs 3 times, never any more.")
+						self.log.warning("STOPPING THE PROCESS BY DESIGN.")
 						self._stop()
 						self.running=False
 						return
@@ -774,7 +863,9 @@ class Pidfile(object):
 					rundir = os.path.join(os.path.dirname(__file__), 'run/')
 			else:
 				rundir = os.getcwd()
+
 			self._path = os.path.abspath(rundir)
+
 			if not os.path.isdir(self._path) or not os.path.exists(self._path):
 				try:
 					os.makedirs(self._path)
@@ -784,8 +875,32 @@ class Pidfile(object):
 						try:
 							os.makedirs(self._path)
 						except (OSError, IOError):
-							self._path = os.abspath(os.getcwd())
-					#self._path = os.abspath(os.getcwd())
+							self._path = os.path.abspath(os.getcwd())
+					#self._path = os.path.abspath(os.getcwd())
+					# . . . . . thinking . . . . .
+					#
+			testfile_to_be_deleted = os.path.abspath(os.path.join(self._path,
+				'tf2b.deleteme'))
+			# just in case this hasn't happened yet...
+			add_os_touch()
+			try:
+				os.touch(testfile_to_be_deleted)
+			except (OSError, IOError):
+				# one last chance.
+				if is_root():
+					# well shit, idk, we tried.
+					#pass
+					self._path = os.path.abspath(os.getcwd())
+				else:
+					self._path = os.path.abspath(os.path.join(homedir(), 'run'))
+					if not os.path.exists(self._path):
+						try:
+							os.mkdir(self._path, 0o777)
+						except (OSError, IOError):
+							self._path = os.path.abspath(os.getcwd())
+			else:
+				os.unlink(testfile_to_be_deleted)
+
 		return self._path
 	path = property(get_path, set_path)
 		# -------------------------------------- #
@@ -833,7 +948,7 @@ class Pidfile(object):
 			try:
 				os.makedirs(self._path)
 			except (OSError, IOError):
-				self.path = os.abspath(os.getcwd())
+				self.path = os.path.abspath(os.getcwd())
 		return
 
 	def fixpath(self,pidfile):
@@ -1745,7 +1860,11 @@ def load_config(config_file=config_file()):
 class MyLogger(logging.Logger):
 	opt_debug = False
 	opt_full_verbose = False
-	opt_verbose = False
+
+	# opt_verbose = False
+	# 0,1,2,3,4:0=quiet,1=verbose,2=more verbose,3=most verbose,4=debug & verbose
+	opt_verbose = 0
+
 	opt_had_verbose = False
 	opt_quiet = False
 	had_error = False
@@ -1766,13 +1885,20 @@ class MyLogger(logging.Logger):
 		try:
 			self.opt_full_verbose = opts.totally_verbose
 		except AttributeError as e:
+			die("Ohhhhhhh.")
 			try:
 				self.opt_full_verbose = opts.verbose
 			except AttributeError as e:
 				pass
+		else:
+			if not opts.totally_verbose:
+				self.opt_full_verbose = False
 
 		try:
 			self.opt_verbose = opts.verbose
+			if type(opts.verbose) is type(bool(1)) and self.opt_verbose:
+				self.opt_verbose=1
+
 		except AttributeError as e:
 			pass
 
@@ -1815,12 +1941,33 @@ class MyLogger(logging.Logger):
 	'''
 
 	def debug(self, msg, *args, **kwargs):
-		if self.opt_full_verbose and self.opt_debug:
+		if self.opt_full_verbose and self.opt_debug and not self.opt_quiet:
 			print( msg)
 		return logging.Logger.debug(self, msg, *args, **kwargs)
 		
 	def info(self, msg, *args, **kwargs):
-		if self.opt_verbose:
+		# if self.opt_verbose:
+		if not self.opt_quiet:
+			print(msg)
+		return logging.Logger.info(self, msg, *args, **kwargs)
+
+	def info1(self, msg, *args, **kwargs):
+		if self.opt_verbose >= 1:
+			print(msg)
+		return logging.Logger.info(self, msg, *args, **kwargs)
+
+	def info2(self, msg, *args, **kwargs):
+		if self.opt_verbose >= 2:
+			print(msg)
+		return logging.Logger.info(self, msg, *args, **kwargs)
+
+	def info3(self, msg, *args, **kwargs):
+		if self.opt_verbose >= 3:
+			print(msg)
+		return logging.Logger.info(self, msg, *args, **kwargs)
+
+	def info4(self, msg, *args, **kwargs):
+		if self.opt_verbose >= 4:
 			print(msg)
 		return logging.Logger.info(self, msg, *args, **kwargs)
 
@@ -1980,13 +2127,14 @@ class MyParser(optparse.OptionParser):
 
 		# The user did not enter --help, they only entered -h, show short help and
 		# instructions on howto view full help.
-		if not '--help' in sys.argv and self.extra_txt is not None:
+		if '--help' not in sys.argv and self.extra_txt is not None:
 			# print the short usage.
 			self.set_usage("%s\n%s" % (self.get_usage(), "*** USE '--help' for the full help page. ***"))
 
 		# If NOT (--help was typed in, and there is extra_text to show, and
 		# full_help_available)
-		if not (self.full_help_available and '--help' in sys.argv and self.extra_txt is not None):
+		if not ('--help' in sys.argv and self.extra_txt is not None and 
+			self.full_help_available):
 			# print help as the OptionParser normally would, without extra goodies
 			optparse.OptionParser.print_help(self)
 
@@ -2433,8 +2581,9 @@ def set_logging(opts, name, quiet=False, __logdir__=__logdir__):
 		name=name,
 		filename = os.path.abspath(os.path.join(os.path.abspath(__logdir__), log_file )),
 		level=level,
-		format='%(created)f %(asctime)s %(name)-10s %(levelname)-8s %(message)s',
-		datefmt="%m.%d.%Y %H:%M:%S")
+		format='%(asctime)s.%(msecs)03d %(name)-10s %(levelname)-8s ' \
+			'[PID: %(process)d]  %(message)s',
+		datefmt="%Y%m%d %H:%M:%S")
 	logging.setLoggerClass(MyLogger)
 	log = logging.getLogger(name)
 	log.setopts(opts)
@@ -2469,32 +2618,6 @@ def set_logging(opts, name, quiet=False, __logdir__=__logdir__):
 		buf = StringIO()
 		sys.stdout = buf
 
-	'''
-	log.debug('-'*80) 
-	# I want the output alphabatized, so I am going to create a list of tuples,
-	# sort them, no wait, you know what would be faster? to just grab the keys,
-	# sort those, request each value by key.
-	opt_keys = list(opts.__dict__.keys())
-	opt_keys.sort()
-	for opt in opt_keys:
-		value = opts.__dict__[opt]
-	#for opt, value in opts.__dict__.items():
-		if type(value) == type(str('')):
-			if value.strip() == '_empty_val_trick_':
-				value = ''
-		if str(opt).lower() in ('cloud_checker_access_key',
-			'password',
-			'pass',
-			'sr_secret_access_key',
-			'secret_access_key',
-			'aws_secret_access_key',
-			'db_password'):
-			value = protect(value)
-
-		log.debug("OPTION %s: %s" % (opt,value))
-	log.debug('-'*80)
-	'''
-	
 	relogOpts(opts, "Options parsed from STDIN")
 
 	if not totally_verbose:
@@ -2540,7 +2663,8 @@ def relogOpts(opts, msg=None, also_protect=[]):
 	log.debug('-'*80) 
 	return
 
-
+def is_root():
+	return bool(getpass.getuser()=='root')
 
 def homedir():
 	""" Get Home directory path in Python for Windows and Linux
@@ -2993,10 +3117,17 @@ def trim(item):
 
 def die(string=None):
 	global log
-	if log and string:
-		log.error(string)
-	elif string:
-		print("output: '%s'" % string)
+	try:
+		if log and string:
+			log.error(string)
+
+	except NameError:
+		if string:
+			print("output: '%s'" % string)
+	else:
+		if not log and string:
+			print("output: '%s'" % string)
+
 	sys.exit()
 DIE=Die=die
 
@@ -3131,23 +3262,32 @@ def sendEmail(body, subject, to, mfrom, cc, host=None, local_hostname=None,
 		"provided, sendmail failed - %s " % subject)
 		return False
 
+def add_os_touch():
+	if not getattr(os,'touch',None):
+		if sys.version_info >= (3, 3) and sys.version_info < (3,6):
+			def touch(fname, *largs,**kwargs):
+				if os.path.isfile(fname) and os.path.exists(fname): return False
+				open(fname, 'w+').close()
+				return True
+
+		elif sys.version_info >=(3, 3):
+			def touch(fname, times=None, ns=None, dir_fd=None):
+				if os.path.isfile(fname) and os.path.exists(fname): return False
+				with os.open(fname, os.O_CREAT, dir_fd=dir_fd) as f:
+					os.utime(f.fileno() if os.utime in os.supports_fd else fname,
+						times=times, ns=ns, dir_fd=dir_fd)
+				return True
+		else:
+			def touch(fname, times=None):
+				if os.path.isfile(fname) and os.path.exists(fname): return False
+				with file(fname, 'a'):
+					os.utime(fname, times)
+				return True
+		os.touch = touch
+
 
 if not getattr(os,'touch',None):
-	if sys.version_info >= (3, 3):
-		def touch(fname, times=None, ns=None, dir_fd=None):
-			if os.path.isfile(fname) and os.path.exists(fname): return False
-			with os.open(fname, os.O_APPEND, dir_fd=dir_fd) as f:
-				os.utime(f.fileno() if os.utime in os.supports_fd else fname,
-					times=times, ns=ns, dir_fd=dir_fd)
-			return True
-	else:
-		def touch(fname, times=None):
-			if os.path.isfile(fname) and os.path.exists(fname): return False
-			with file(fname, 'a'):
-				os.utime(fname, times)
-			return True
-	os.touch = touch
-
+	add_os_touch()
 
 def main(): #global __version__
 	hello()
