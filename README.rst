@@ -1,6 +1,19 @@
 sbash
 =====
 
+“S-Bash” (secure-bash) is a configurable program, that allows a server
+administrator full control.  From which users are affected, the idle time
+timeout in seconds, to which users have permission to override, or adjust
+timeouts, and screen savers (from editing an sbash.rc file located in
+/home/{user}/sbash.rc). The first version simply locks the screen when the
+timeout is reached, after X-seconds of inactivity at any terminal.  If the
+native (built-in) screen-lock isn't available, PyTis's PyLock is used.  Even
+switching to a new terminal and sending a kill signal can't be used as a
+work-around.  This nifty little program will make sure the user enters a valid
+password, or that root does.  This even works in PuTTy!  Future versions will
+include a few text-based screensavers that can be displayed (if desired) during
+idle time.
+
 Okay, lets talk why.  Why is this needed?  Well, it may not be for you, or...
 it may just be exactly what you are looking for.  I know I want it, that is
 why I am writing it.  Because I think others may find it useful, is why I am
